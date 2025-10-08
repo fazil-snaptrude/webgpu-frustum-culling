@@ -33,7 +33,10 @@ async function main(): Promise<void> {
 
   const wesl = await link(mainWesl);
 
-  const [setUniforms, bindGroup, renderPipeline] = setup(device, wesl);
+  const [setUniforms, indirectBuffer, bindGroup, renderPipeline] = setup(
+    device,
+    wesl
+  );
 
   const topColor: GUIColor = { color: [1, 1, 1] };
   gui
@@ -62,6 +65,9 @@ async function main(): Promise<void> {
       averageDrawTime = 0;
     });
 
+  const useIndirectObj = { useIndirect: false };
+  gui.add(useIndirectObj, "useIndirect").name("Use Indirect Draw");
+
   const rafCallback = () => {
     if (performance.now() - start >= 1000) {
       console.log(
@@ -80,7 +86,9 @@ async function main(): Promise<void> {
       context,
       bindGroup,
       renderPipeline,
-      drawCountObj.drawCount
+      drawCountObj.drawCount,
+      indirectBuffer,
+      useIndirectObj.useIndirect
     );
     framesThisSecond += 1;
     averageDrawTime = (averageDrawTime + drawTime) / framesThisSecond;
@@ -99,6 +107,7 @@ const setup = (
     topColor?: [number, number, number] | undefined,
     bottomColor?: [number, number, number] | undefined
   ) => void,
+  GPUBuffer,
   GPUBindGroup,
   GPURenderPipeline
 ] => {
@@ -176,7 +185,19 @@ const setup = (
     },
   });
 
-  return [setUniforms, bindGroup, renderPipeline];
+  const indirectBufferValues = new Uint32Array([
+    3, // vertex count
+    1, // instance count
+    0, // first vertex
+    0, // first instance
+  ]);
+  const indirectBuffer = device.createBuffer({
+    size: indirectBufferValues.byteLength,
+    usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+  });
+  device.queue.writeBuffer(indirectBuffer, 0, indirectBufferValues);
+
+  return [setUniforms, indirectBuffer, bindGroup, renderPipeline];
 };
 
 const draw = (
@@ -184,7 +205,9 @@ const draw = (
   context: GPUCanvasContext,
   bindGroup: GPUBindGroup,
   renderPipeline: GPURenderPipeline,
-  drawCount: number
+  drawCount: number,
+  indirectBuffer: GPUBuffer,
+  useIndirect = false
 ): number => {
   const timeBeginning = performance.now();
 
@@ -205,7 +228,11 @@ const draw = (
   renderPass.setPipeline(renderPipeline);
 
   for (let i = 0; i < drawCount; i++) {
-    renderPass.draw(3, 1);
+    if (useIndirect) {
+      renderPass.drawIndirect(indirectBuffer, 0);
+    } else {
+      renderPass.draw(3, 1);
+    }
   }
 
   renderPass.end();
