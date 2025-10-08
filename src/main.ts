@@ -47,8 +47,44 @@ async function main(): Promise<void> {
 
   setUniforms(topColor.color, bottomColor.color);
 
+  let start = performance.now();
+  let framesThisSecond = 0;
+  let averageDrawTime = 0;
+  const drawCountObj = { drawCount: 100 };
+  gui
+    .add(drawCountObj, "drawCount")
+    .min(0)
+    .max(1_000_000)
+    .step(1)
+    .onChange(() => {
+      start = performance.now();
+      framesThisSecond = 0;
+      averageDrawTime = 0;
+    });
+
   const rafCallback = () => {
-    draw(device, context, bindGroup, renderPipeline);
+    if (performance.now() - start >= 1000) {
+      console.log(
+        `Last second average draw time for ${
+          drawCountObj.drawCount
+        } draw calls: ${averageDrawTime.toFixed(4)} ms, ${(
+          averageDrawTime / drawCountObj.drawCount
+        ).toFixed(4)} ms per draw call`
+      );
+      start = performance.now();
+      framesThisSecond = 0;
+    }
+
+    const drawTime = draw(
+      device,
+      context,
+      bindGroup,
+      renderPipeline,
+      drawCountObj.drawCount
+    );
+    framesThisSecond += 1;
+    averageDrawTime = (averageDrawTime + drawTime) / framesThisSecond;
+
     requestAnimationFrame(rafCallback);
   };
 
@@ -147,8 +183,11 @@ const draw = (
   device: GPUDevice,
   context: GPUCanvasContext,
   bindGroup: GPUBindGroup,
-  renderPipeline: GPURenderPipeline
-): void => {
+  renderPipeline: GPURenderPipeline,
+  drawCount: number
+): number => {
+  const timeBeginning = performance.now();
+
   const encoder = device.createCommandEncoder();
   const texture = context.getCurrentTexture().createView();
   const renderPass = encoder.beginRenderPass({
@@ -164,7 +203,13 @@ const draw = (
   });
   renderPass.setBindGroup(0, bindGroup);
   renderPass.setPipeline(renderPipeline);
-  renderPass.draw(3, 1);
+
+  for (let i = 0; i < drawCount; i++) {
+    renderPass.draw(3, 1);
+  }
+
   renderPass.end();
   device.queue.submit([encoder.finish()]);
+
+  return performance.now() - timeBeginning;
 };
