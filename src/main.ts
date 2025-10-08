@@ -52,7 +52,7 @@ async function main(): Promise<void> {
 
   let start = performance.now();
   let framesThisSecond = 0;
-  let averageDrawTime = 0;
+  let cumulativeDrawTime = 0;
   const drawCountObj = { drawCount: 100 };
   gui
     .add(drawCountObj, "drawCount")
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     .onChange(() => {
       start = performance.now();
       framesThisSecond = 0;
-      averageDrawTime = 0;
+      cumulativeDrawTime = 0;
     });
 
   const useIndirectObj = { useIndirect: false };
@@ -70,6 +70,7 @@ async function main(): Promise<void> {
 
   const rafCallback = () => {
     if (performance.now() - start >= 1000) {
+      const averageDrawTime = cumulativeDrawTime / framesThisSecond;
       console.log(
         `Last second average draw time for ${
           drawCountObj.drawCount
@@ -79,6 +80,7 @@ async function main(): Promise<void> {
       );
       start = performance.now();
       framesThisSecond = 0;
+      cumulativeDrawTime = 0;
     }
 
     const drawTime = draw(
@@ -91,7 +93,7 @@ async function main(): Promise<void> {
       useIndirectObj.useIndirect
     );
     framesThisSecond += 1;
-    averageDrawTime = (averageDrawTime + drawTime) / framesThisSecond;
+    cumulativeDrawTime += drawTime;
 
     requestAnimationFrame(rafCallback);
   };
